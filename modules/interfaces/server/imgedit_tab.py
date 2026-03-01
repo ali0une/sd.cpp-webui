@@ -1,5 +1,8 @@
 """sd.cpp-webui - Image edit UI"""
 
+import os ## need for LoRA
+from typing import List ## need for LoRA
+
 import gradio as gr
 
 from modules.core.server.sdcpp_server import imgedit_api
@@ -11,7 +14,11 @@ from modules.utils.ui_handler import (
     get_ordered_inputs, bind_generation_pipeline,
     refresh_all_options
 )
-from modules.shared_instance import config
+from modules.shared_instance import config, subprocess_manager ## need config for LoRA
+from modules.loader import (
+    get_models, reload_models ## need for LoRA
+)
+from modules.ui.constants import RELOAD_SYMBOL, RANDOM_SYMBOL ## need RELOAD_SYMBOL for LoRA
 from modules.ui.models import create_imgedit_model_sel_ui
 from modules.ui.prompts import create_prompts_ui
 from modules.ui.generation_settings import (
@@ -150,6 +157,98 @@ with gr.Blocks() as imgedit_server_block:
     # Prompts
     prompts_ui = create_prompts_ui(nprompt_support=False)
     inputs_map.update(prompts_ui)
+
+    ## LoRA
+    lora_dir_txt = gr.Textbox(value=config.get('lora_dir'), visible=False)
+
+    with gr.Row():
+        with gr.Column(scale=1):
+            lora_model = gr.Dropdown(
+                label="LoRA Model",
+                choices=[(f, f"{os.path.splitext(f)[0]}") for f in get_models(config.get('lora_dir'))],
+                value="",
+                allow_custom_value=True,
+                interactive=True
+            )
+        with gr.Column(scale=1):
+            lora_strength = gr.Slider(
+                label="LoRA Strength",
+                minimum=0.1,
+                maximum=2.0,
+                step=0.05,
+                value=1.0
+            )
+        with gr.Row():
+            reload_lora_btn = gr.Button(value=RELOAD_SYMBOL)
+            add_lora_btn = gr.Button(value="Add LoRA")
+            clear_lora_btn = gr.ClearButton(lora_model)
+
+        current_pprompt = inputs_map['in_pprompt']
+        # Add to inputs_map
+        inputs_map['in_lora_model'] = lora_model
+        inputs_map['in_lora_strength'] = lora_strength
+
+#        def add_lora_to_prompt(lora_model, lora_strength, current_pprompt):
+#            if not lora_model:
+#                return current_pprompt  # nothing selected, leave prompt unchanged
+#            # Build the LoRA string
+#            lora_string = f"<lora:{lora_model}:{lora_strength}>"
+#            # Append (with a space separator if needed)
+#            new_prompt = f"{current_pprompt} {lora_string}".strip()
+#            return new_prompt
+
+        def add_lora_to_prompt(lora_model, lora_strength, current_pprompt):
+            """Append the LoRA string and then clear the LoRA widgets."""
+            if not lora_model:
+                # nothing selected – nothing to do
+                return current_pprompt, lora_model, lora_strength
+
+            # Build the LoRA string
+            lora_string = f"<lora:{lora_model}:{lora_strength}>"
+
+            # Append it to the prompt
+            new_prompt = f"{current_pprompt} {lora_string}".strip()
+
+            # Reset the widgets (empty string for the dropdown, default 1.0 for the slider)
+            cleared_model = ""
+            cleared_strength = 1.0
+
+            # Return the updated prompt plus the cleared values
+            return new_prompt, cleared_model, cleared_strength
+
+    # Reload binding
+#    reload_lora_btn.click(
+#        reload_models,
+#        inputs=[lora_dir_txt],
+#        outputs=[lora_model]  ## FIXME : outputs "file.safetensors" instead of "file"
+#    )
+    # Build a "stripped" version of the choices list
+    def get_stripped_choices(folder: str) -> List[str]:
+        # reuse the original get_models() to get the raw filenames
+        filenames = get_models(folder)
+        # create tuples: (value, label) – both are the basename
+#        return [(os.path.splitext(f)[0], os.path.splitext(f)[0]) for f in filenames]
+        return [(f, f"{os.path.splitext(f)[0]}") for f in filenames]
+
+    # Override the click handler for the Reload button
+    reload_lora_btn.click(
+        # Use a lambda that calls get_stripped_choices() and returns a gr.update
+        lambda folder: gr.update(choices=get_stripped_choices(folder)),
+        inputs=[lora_dir_txt],
+        outputs=[lora_model]          # the dropdown component itself
+    )
+
+#    add_lora_btn.click(
+#        fn=add_lora_to_prompt,
+#        inputs=[lora_model, lora_strength, current_pprompt],
+#        outputs=current_pprompt,
+#    )
+    add_lora_btn.click(
+        fn=add_lora_to_prompt,
+        inputs=[lora_model, lora_strength, current_pprompt],
+        outputs=[current_pprompt, lora_model, lora_strength],
+    )
+    ## /LoRA
 
     # Settings
     with gr.Row():
