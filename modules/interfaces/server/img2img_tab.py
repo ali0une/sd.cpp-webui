@@ -198,15 +198,6 @@ with gr.Blocks()as img2img_server_block:
         inputs_map['in_lora_model'] = lora_model
         inputs_map['in_lora_strength'] = lora_strength
 
-#        def add_lora_to_prompt(lora_model, lora_strength, current_pprompt):
-#            if not lora_model:
-#                return current_pprompt  # nothing selected, leave prompt unchanged
-#            # Build the LoRA string
-#            lora_string = f"<lora:{lora_model}:{lora_strength}>"
-#            # Append (with a space separator if needed)
-#            new_prompt = f"{current_pprompt} {lora_string}".strip()
-#            return new_prompt
-
         def add_lora_to_prompt(lora_model, lora_strength, current_pprompt):
             """Append the LoRA string and then clear the LoRA widgets."""
             if not lora_model:
@@ -248,11 +239,6 @@ with gr.Blocks()as img2img_server_block:
         outputs=[lora_model]          # the dropdown component itself
     )
 
-#    add_lora_btn.click(
-#        fn=add_lora_to_prompt,
-#        inputs=[lora_model, lora_strength, current_pprompt],
-#        outputs=current_pprompt,
-#    )
     add_lora_btn.click(
         fn=add_lora_to_prompt,
         inputs=[lora_model, lora_strength, current_pprompt],
